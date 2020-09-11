@@ -15,8 +15,9 @@ locale.setlocale(locale.LC_ALL, '')  # Sets things like first day of week, weekd
 
 mouse = Controller()
 
-TIMEOUT = 600
-
+TIMEOUTS = 600
+SHORT_SLEEP = 1
+TIMEOUT_SECONDS = TIMEOUTS * SHORT_SLEEP
 
 DATA_ROOT = 'Data/'
 DATA_CACHE = DATA_ROOT + 'Cache/'
@@ -89,15 +90,17 @@ try:
     logged_activity, oldest_activity = GetLoggedActivity()
     print("First", oldest_activity, "Last", logged_activity)
     if logged_activity:
-        if (datetime.now() - logged_activity).total_seconds() < TIMEOUT:
+        EndSection(oldest_activity, logged_activity) 
+        if (datetime.now() - logged_activity).total_seconds() < TIMEOUT_SECONDS:
             print("restarted within timeout, can't tell if by system or user")
+            oldest_activity = logged_activity
+            logged_activity = AppendLast(oldest_activity)
         else:
             print("restarted after timeout passed (or section already ended)")
-            EndSection(oldest_activity, logged_activity) 
             oldest_activity = None
             logged_activity = None
-            opos = mouse.position
-           
+        opos = mouse.position
+          
     while True:
         # Wait for activity (skipped if restarted within timeout)
         while opos == mouse.position:
@@ -111,10 +114,10 @@ try:
         sys.stdout.flush()
         logged_activity = AppendLast(activity)
 
-        stopped = TIMEOUT
+        stopped = TIMEOUTS
         opos = mouse.position
         while stopped > 0:
-            sleep(1)
+            sleep(SHORT_SLEEP)
             npos = mouse.position
             stopped -= 1
             if opos != npos:
@@ -122,12 +125,20 @@ try:
                 sys.stdout.write('.')
                 sys.stdout.flush()
                 activity = datetime.now()  # last confirmed activity
-                stopped = TIMEOUT  # restart
+                stopped = TIMEOUTS  # restart
                 opos = npos
-                if not logged_activity or (activity - logged_activity).total_seconds() >= TIMEOUT:
-                        sys.stdout.write('w')
-                        sys.stdout.flush()
-                        logged_activity = AppendLast(activity)
+                seconds_since_last_log = (activity - logged_activity).total_seconds() if logged_activity else TIMEOUT_SECONDS
+                if seconds_since_last_log > 2 * TIMEOUT_SECONDS:
+                    # must have slept, end old section
+                    sys.stdout.write('S+W\n')
+                    EndSection(oldest_activity, logged_activity)
+                    # activity OK
+                    oldest_activity = activity  # not yet written
+                    logged_activity = AppendLast(activity)
+                elif seconds_since_last_log >= TIMEOUT_SECONDS:
+                    sys.stdout.write('w')
+                    sys.stdout.flush()
+                    logged_activity = AppendLast(activity)
             elif stopped == 0:
                 # No longer active, will write
                 sys.stdout.write('s\n')
