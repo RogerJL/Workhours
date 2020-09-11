@@ -25,11 +25,11 @@ ADDED_UP_UNTIL = DATA_CACHE + 'LastDaily.txt'  # Last Daily addup
 CRASH_LOG = DATA_ROOT + 'CrashLog.txt'
 
 
-def AppendLast(Now):
+def AppendLast(now):
     f = open(LAST_TIMESTAMPS, 'a+')
-    f.write(Now.isoformat() + '\n')
+    f.write(now.isoformat() + '\n')
     f.close()
-    return Now
+    return now
 
 def GetLoggedActivity():
     try:
@@ -51,15 +51,12 @@ def EndSection(started, ended):
     hours = worked.total_seconds() / 60 / 60
     message = f'{started.isoformat(" ", "minutes")} till {ended.strftime("%H:%M")} = {hours} timmar'
     print(message)
-   
+    
     Addtext(started, message)
 
     # added worktime section to output, restart section
-    f = open(LAST_TIMESTAMPS, 'w')
-    f.write('')
-    f.close()
-
-   
+    os.rename(LAST_TIMESTAMPS, LAST_TIMESTAMPS + ".old")
+    
 
 def Addtext(started, text):
     current_week = datetime.isocalendar(started)[1]
@@ -87,17 +84,19 @@ try:
     mkdir(DATA_ROOT)
     mkdir(DATA_CACHE)
 
+    activity = None  # Unknown
+    opos = None
     logged_activity, oldest_activity = GetLoggedActivity()
     print("First", oldest_activity, "Last", logged_activity)
-    if logged_activity and (datetime.now() - logged_activity).total_seconds() < TIMEOUT:
-        print("restarted within timeout, can't tell if by system or user")
-        opos = None
-    else:
-        print("restarted after timeout passed (or section already ended)")
-        EndSection(oldest_activity, logged_activity)
-        oldest_activity = None
-        logged_activity = None
-        opos = mouse.position
+    if logged_activity:
+        if (datetime.now() - logged_activity).total_seconds() < TIMEOUT:
+            print("restarted within timeout, can't tell if by system or user")
+        else:
+            print("restarted after timeout passed (or section already ended)")
+            EndSection(oldest_activity, logged_activity) 
+            oldest_activity = None
+            logged_activity = None
+            opos = mouse.position
            
     while True:
         # Wait for activity (skipped if restarted within timeout)
@@ -108,6 +107,8 @@ try:
         activity = datetime.now()
         if not oldest_activity:
             oldest_activity = activity
+        sys.stdout.write('W')
+        sys.stdout.flush()
         logged_activity = AppendLast(activity)
 
         stopped = TIMEOUT
@@ -138,8 +139,9 @@ try:
 except Exception:
     # os.rename(CRASH_LOG, CRASH_LOG + ".old")
     log = open(CRASH_LOG, 'w')
-   
+    
     traceback.print_exc(file=log)
-   
+    
     log.close()
     print("Crashlog written\n")
+
